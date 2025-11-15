@@ -1,11 +1,10 @@
 /**
- * Minimal exchange server for Figma OAuth.
- * POST /api/figma/token { code, redirect_uri }
+ * Express server for Figma OAuth and API routes
  */
-require('dotenv').config();
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
+import 'dotenv/config';
+import express from 'express';
+import axios from 'axios';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
@@ -13,6 +12,72 @@ app.use(express.json());
 
 const FIGMA_TOKEN_URL = "https://www.figma.com/api/oauth/token";
 const PORT = process.env.PORT || 4000;
+
+// Import route handlers
+async function setupRoutes() {
+  try {
+    console.log('🔄 Loading Figma routes...');
+    const figmaRoutes = (await import('../src/routes/figma.js')).default;
+    
+    console.log('🔄 Loading Braze routes...');
+    const brazeRoutes = (await import('../src/routes/brazeConnect.js')).default;
+    
+    console.log('🔄 Loading Braze test routes...');
+    const brazeTestRoutes = (await import('../src/routes/brazeAuthTest.js')).default;
+    
+    // Mount route handlers with error handling
+    app.use('/api/figma', (req, res, next) => {
+      try {
+        figmaRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ Figma route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+    
+    app.use('/api/local', (req, res, next) => {
+      try {
+        figmaRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ Local route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+    
+    app.use('/api/braze', (req, res, next) => {
+      try {
+        brazeRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ Braze route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+
+    // Also mount braze routes at /braze for frontend compatibility
+    app.use('/braze', (req, res, next) => {
+      try {
+        brazeRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ Braze route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+
+    app.use('/test', (req, res, next) => {
+      try {
+        brazeTestRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ Test route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+    
+    console.log('✅ All routes loaded successfully');
+  } catch (error) {
+    console.error('⚠️ Route loading error:', error.message);
+    console.error(error.stack);
+  }
+}
 
 app.post('/api/figma/token', async (req, res) => {
   const { code, redirect_uri } = req.body;
@@ -44,6 +109,9 @@ app.post('/api/figma/token', async (req, res) => {
 
 app.get('/', (req, res) => res.send('Figma OAuth server is running'));
 
-app.listen(PORT, () => {
-  console.log(`Figma OAuth server listening on http://localhost:${PORT}`);
+// Setup routes and start server
+setupRoutes().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Figma OAuth server listening on http://localhost:${PORT}`);
+  });
 });
