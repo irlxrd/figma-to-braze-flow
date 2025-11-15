@@ -34,6 +34,9 @@ export default function ConnectionScreen() {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [connectSuccess, setConnectSuccess] = useState(false);
+  const [figmaDialogOpen, setFigmaDialogOpen] = useState(false);
+  const [teamId, setTeamId] = useState("");
+  const [teamIdError, setTeamIdError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check connection status on mount
@@ -55,9 +58,19 @@ export default function ConnectionScreen() {
         setBrazeConnected(false);
       }
 
-      // Check Figma connection (for now, assume not connected if no API endpoint exists)
-      // TODO: Add Figma connection check endpoint
-      setFigmaConnected(false);
+      // Check Figma connection
+      try {
+        const figmaResponse = await fetch("/api/figma/status");
+        if (figmaResponse.ok) {
+          const figmaData = await figmaResponse.json();
+          setFigmaConnected(figmaData.configured === true);
+        } else {
+          setFigmaConnected(false);
+        }
+      } catch (error) {
+        console.error("Figma connection check failed:", error);
+        setFigmaConnected(false);
+      }
       
       setLoading(false);
     };
@@ -116,6 +129,22 @@ export default function ConnectionScreen() {
     setConnectSuccess(false);
   };
 
+  const handleOpenFigmaDialog = () => {
+    setFigmaDialogOpen(true);
+    setTeamIdError(null);
+    setTeamId("");
+  };
+
+  const handleBrowseFigmaFiles = () => {
+    if (!teamId.trim()) {
+      setTeamIdError("Please enter a team ID");
+      return;
+    }
+
+    // Navigate to the team files page
+    navigate(`/figma/team/${teamId.trim()}/files`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <DashboardHeader
@@ -148,8 +177,21 @@ export default function ConnectionScreen() {
               )}
             </div>
             {!figmaConnected && !loading && (
-              <Button className="mt-6 w-full" size="lg">
+              <Button 
+                className="mt-6 w-full" 
+                size="lg"
+                onClick={() => navigate("/figma/connect")}
+              >
                 Connect Figma
+              </Button>
+            )}
+            {figmaConnected && !loading && (
+              <Button 
+                className="mt-6 w-full" 
+                size="lg"
+                onClick={handleOpenFigmaDialog}
+              >
+                Browse Your Figma Files
               </Button>
             )}
           </Card>
@@ -199,6 +241,63 @@ export default function ConnectionScreen() {
           )}
         </div>
       </main>
+
+      {/* Browse Figma Files Dialog */}
+      <Dialog open={figmaDialogOpen} onOpenChange={setFigmaDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Enter Team ID</DialogTitle>
+            <DialogDescription>
+              Enter your Figma team ID to browse files and projects.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="teamId">Team ID</Label>
+              <Input
+                id="teamId"
+                type="text"
+                placeholder="Enter your Figma team ID"
+                value={teamId}
+                onChange={(e) => {
+                  setTeamId(e.target.value);
+                  setTeamIdError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && teamId.trim()) {
+                    handleBrowseFigmaFiles();
+                  }
+                }}
+              />
+              <p className="text-sm text-muted-foreground">
+                You can find your team ID in your Figma team URL.
+              </p>
+            </div>
+            {teamIdError && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span>{teamIdError}</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFigmaDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleBrowseFigmaFiles}
+              disabled={!teamId.trim()}
+            >
+              Browse Files
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Connect Braze Dialog */}
       <Dialog open={brazeDialogOpen} onOpenChange={setBrazeDialogOpen}>

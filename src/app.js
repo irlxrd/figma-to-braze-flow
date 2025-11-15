@@ -8,6 +8,8 @@ import cors from "cors";
 import "./config.js"; // Load and validate config
 import brazeAuthTestRouter from "./routes/brazeAuthTest.js";
 import brazeConnectRouter from "./routes/brazeConnect.js";
+import brazeUploadRouter from "./routes/brazeUpload.js";
+import figmaRouter from "./routes/figma.js";
 
 const app = express();
 
@@ -23,6 +25,9 @@ app.get("/health", (req, res) => {
 // Register routes
 app.use("/test", brazeAuthTestRouter);
 app.use("/braze", brazeConnectRouter);
+app.use("/api/braze", brazeUploadRouter);
+app.use("/api/figma", figmaRouter);
+app.use("/api/local", figmaRouter); // POST /api/local/figma-token is handled by figmaRouter
 
 // Root route - API information
 app.get("/", (req, res) => {
