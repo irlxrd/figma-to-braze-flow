@@ -7,6 +7,7 @@ import express from "express";
 import cors from "cors";
 import "./config.js"; // Load and validate config
 import brazeAuthTestRouter from "./routes/brazeAuthTest.js";
+import brazeConnectRouter from "./routes/brazeConnect.js";
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.get("/health", (req, res) => {
 
 // Register routes
 app.use("/test", brazeAuthTestRouter);
+app.use("/braze", brazeConnectRouter);
 
 // Root route - API information
 app.get("/", (req, res) => {

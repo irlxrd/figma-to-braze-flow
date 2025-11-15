@@ -5,8 +5,7 @@
 
 import axios from "axios";
 import { getAuthHeaders } from "./brazeAuth.js";
-
-const BRAZE_REST_ENDPOINT = process.env.BRAZE_REST_ENDPOINT;
+import { getBrazeConfig } from "./brazeStorage.js";
 
 /**
  * Make an authenticated request to Braze API
@@ -17,15 +16,18 @@ const BRAZE_REST_ENDPOINT = process.env.BRAZE_REST_ENDPOINT;
  * @throws {Error} If request fails or configuration is missing
  */
 export async function brazeRequest(method, path, body = null) {
+  const braze = getBrazeConfig();
+  const endpoint = braze.endpoint || process.env.BRAZE_REST_ENDPOINT;
+
   // Validate configuration
-  if (!BRAZE_REST_ENDPOINT) {
+  if (!endpoint) {
     throw new Error(
-      "BRAZE_REST_ENDPOINT is not defined. Please set it in your environment variables."
+      "Braze endpoint is not configured. Please connect your Braze account."
     );
   }
 
   // Build full URL
-  const url = `${BRAZE_REST_ENDPOINT}${path}`;
+  const url = `${endpoint}${path}`;
 
   // Get authentication headers
   const headers = getAuthHeaders();
