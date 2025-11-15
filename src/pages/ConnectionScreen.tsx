@@ -2,7 +2,24 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Figma, Zap, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Figma, Zap, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 
@@ -11,6 +28,12 @@ export default function ConnectionScreen() {
   const [figmaConnected, setFigmaConnected] = useState(false);
   const [brazeConnected, setBrazeConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [brazeDialogOpen, setBrazeDialogOpen] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [region, setRegion] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectSuccess, setConnectSuccess] = useState(false);
 
   useEffect(() => {
     // Check connection status on mount
@@ -19,21 +42,14 @@ export default function ConnectionScreen() {
       
       // Check Braze connection
       try {
-        const brazeResponse = await fetch("http://localhost:3000/test/braze-auth");
+        const brazeResponse = await fetch("/braze/connect");
         
-        // Check if the HTTP response is OK (200-299)
-        if (!brazeResponse.ok) {
-          console.log("Braze connection check: HTTP error", brazeResponse.status);
+        if (brazeResponse.ok) {
+          const brazeData = await brazeResponse.json();
+          setBrazeConnected(brazeData.connected === true);
+        } else {
           setBrazeConnected(false);
-          setLoading(false);
-          return;
         }
-        
-        const brazeData = await brazeResponse.json();
-        // Only set connected if both HTTP status is OK AND success is true
-        const isConnected = brazeData.success === true;
-        console.log("Braze connection check result:", isConnected, brazeData);
-        setBrazeConnected(isConnected);
       } catch (error) {
         console.error("Braze connection check failed:", error);
         setBrazeConnected(false);
@@ -51,6 +67,53 @@ export default function ConnectionScreen() {
 
   const handleContinue = () => {
     navigate("/select-design");
+  };
+
+  const handleConnectBraze = async () => {
+    if (!apiKey || !region) {
+      setConnectError("Please fill in all fields");
+      return;
+    }
+
+    setConnecting(true);
+    setConnectError(null);
+    setConnectSuccess(false);
+
+    try {
+      const response = await fetch("/braze/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ apiKey, region }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setConnectSuccess(true);
+        setBrazeConnected(true);
+        // Close dialog after 1.5 seconds
+        setTimeout(() => {
+          setBrazeDialogOpen(false);
+          setApiKey("");
+          setRegion("");
+          setConnectSuccess(false);
+        }, 1500);
+      } else {
+        setConnectError(data.error || "Failed to connect to Braze");
+      }
+    } catch (error) {
+      setConnectError(error instanceof Error ? error.message : "Failed to connect to Braze");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleOpenBrazeDialog = () => {
+    setBrazeDialogOpen(true);
+    setConnectError(null);
+    setConnectSuccess(false);
   };
 
   return (
@@ -114,7 +177,12 @@ export default function ConnectionScreen() {
               )}
             </div>
             {!brazeConnected && !loading && (
-              <Button className="mt-6 w-full" size="lg" variant="secondary">
+              <Button
+                className="mt-6 w-full"
+                size="lg"
+                variant="secondary"
+                onClick={handleOpenBrazeDialog}
+              >
                 Connect Braze
               </Button>
             )}
@@ -131,6 +199,86 @@ export default function ConnectionScreen() {
           )}
         </div>
       </main>
+
+      {/* Connect Braze Dialog */}
+      <Dialog open={brazeDialogOpen} onOpenChange={setBrazeDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Connect Braze</DialogTitle>
+            <DialogDescription>
+              Enter your Braze API key and select your region to connect.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="apiKey">API Key</Label>
+              <Input
+                id="apiKey"
+                type="password"
+                placeholder="Enter your Braze API key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={connecting || connectSuccess}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="region">Region</Label>
+              <Select
+                value={region}
+                onValueChange={setRegion}
+                disabled={connecting || connectSuccess}
+              >
+                <SelectTrigger id="region">
+                  <SelectValue placeholder="Select region" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fra-01">FRA-01 (Europe)</SelectItem>
+                  <SelectItem value="fra-02">FRA-02 (Europe)</SelectItem>
+                  <SelectItem value="us-01">US-01 (US East)</SelectItem>
+                  <SelectItem value="us-08">US-08 (US East)</SelectItem>
+                  <SelectItem value="au-01">AU-01 (Australia)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {connectError && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span>{connectError}</span>
+              </div>
+            )}
+            {connectSuccess && (
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Connected ✓</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setBrazeDialogOpen(false)}
+              disabled={connecting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConnectBraze}
+              disabled={connecting || connectSuccess || !apiKey || !region}
+            >
+              {connecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                "Connect"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

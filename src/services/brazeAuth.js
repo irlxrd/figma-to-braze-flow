@@ -3,17 +3,20 @@
  * Provides authentication headers for all Braze API requests
  */
 
+import { getBrazeConfig } from "./brazeStorage.js";
+
 /**
  * Get authentication headers for Braze API requests
  * @returns {Object} Headers object with Authorization Bearer token and Content-Type
- * @throws {Error} If BRAZE_API_KEY is not defined
+ * @throws {Error} If API key is not configured
  */
 export function getAuthHeaders() {
-  const apiKey = process.env.BRAZE_API_KEY;
+  const braze = getBrazeConfig();
+  const apiKey = braze.apiKey || process.env.BRAZE_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      "BRAZE_API_KEY is not defined. Please set it in your environment variables."
+      "Braze API key is not configured. Please connect your Braze account."
     );
   }
 

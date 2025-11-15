@@ -1,6 +1,8 @@
 /**
  * Application Configuration
  * Validates and exports environment variables
+ * NOTE: For localhost testing, Braze credentials can be set via in-memory storage
+ * instead of environment variables
  */
 
 import dotenv from "dotenv";
@@ -8,26 +10,15 @@ import dotenv from "dotenv";
 // Load environment variables
 dotenv.config();
 
-// Validate required Braze configuration
+// Get Braze configuration from environment (optional for localhost testing)
 const BRAZE_API_KEY = process.env.BRAZE_API_KEY;
 const BRAZE_REST_ENDPOINT = process.env.BRAZE_REST_ENDPOINT;
 
-if (!BRAZE_API_KEY) {
-  throw new Error(
-    "BRAZE_API_KEY is required. Please set it in your .env file or environment variables."
-  );
-}
-
-if (!BRAZE_REST_ENDPOINT) {
-  throw new Error(
-    "BRAZE_REST_ENDPOINT is required. Please set it in your .env file or environment variables."
-  );
-}
-
+// Don't throw errors if env vars are missing - allow in-memory storage instead
 export const config = {
   braze: {
-    apiKey: BRAZE_API_KEY,
-    restEndpoint: BRAZE_REST_ENDPOINT,
+    apiKey: BRAZE_API_KEY || null,
+    restEndpoint: BRAZE_REST_ENDPOINT || null,
   },
 };
 
