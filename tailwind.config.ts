@@ -61,6 +61,7 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        "figma-orange": "#F24E1E",
       },
       borderRadius: {
         lg: "var(--radius)",
