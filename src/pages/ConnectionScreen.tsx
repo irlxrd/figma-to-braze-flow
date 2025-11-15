@@ -2,13 +2,52 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Figma, Zap } from "lucide-react";
+import { Figma, Zap, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 
 export default function ConnectionScreen() {
   const navigate = useNavigate();
-  const figmaConnected = true;
-  const brazeConnected = true;
+  const [figmaConnected, setFigmaConnected] = useState(false);
+  const [brazeConnected, setBrazeConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check connection status on mount
+    const checkConnections = async () => {
+      setLoading(true);
+      
+      // Check Braze connection
+      try {
+        const brazeResponse = await fetch("http://localhost:3000/test/braze-auth");
+        
+        // Check if the HTTP response is OK (200-299)
+        if (!brazeResponse.ok) {
+          console.log("Braze connection check: HTTP error", brazeResponse.status);
+          setBrazeConnected(false);
+          setLoading(false);
+          return;
+        }
+        
+        const brazeData = await brazeResponse.json();
+        // Only set connected if both HTTP status is OK AND success is true
+        const isConnected = brazeData.success === true;
+        console.log("Braze connection check result:", isConnected, brazeData);
+        setBrazeConnected(isConnected);
+      } catch (error) {
+        console.error("Braze connection check failed:", error);
+        setBrazeConnected(false);
+      }
+
+      // Check Figma connection (for now, assume not connected if no API endpoint exists)
+      // TODO: Add Figma connection check endpoint
+      setFigmaConnected(false);
+      
+      setLoading(false);
+    };
+
+    checkConnections();
+  }, []);
 
   const handleContinue = () => {
     navigate("/select-design");
@@ -36,9 +75,16 @@ export default function ConnectionScreen() {
                   </p>
                 </div>
               </div>
-              <StatusBadge status={figmaConnected ? "connected" : "disconnected"} />
+              {loading ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking...
+                </div>
+              ) : (
+                <StatusBadge status={figmaConnected ? "connected" : "disconnected"} />
+              )}
             </div>
-            {!figmaConnected && (
+            {!figmaConnected && !loading && (
               <Button className="mt-6 w-full" size="lg">
                 Connect Figma
               </Button>
@@ -58,16 +104,23 @@ export default function ConnectionScreen() {
                   </p>
                 </div>
               </div>
-              <StatusBadge status={brazeConnected ? "connected" : "disconnected"} />
+              {loading ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking...
+                </div>
+              ) : (
+                <StatusBadge status={brazeConnected ? "connected" : "disconnected"} />
+              )}
             </div>
-            {!brazeConnected && (
+            {!brazeConnected && !loading && (
               <Button className="mt-6 w-full" size="lg" variant="secondary">
                 Connect Braze
               </Button>
             )}
           </Card>
 
-          {figmaConnected && brazeConnected && (
+          {!loading && figmaConnected && brazeConnected && (
             <Button
               size="lg"
               className="w-full mt-8"
