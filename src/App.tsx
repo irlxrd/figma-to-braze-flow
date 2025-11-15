@@ -9,6 +9,7 @@ import CampaignType from "./pages/CampaignType";
 import MappingPreview from "./pages/MappingPreview";
 import Success from "./pages/Success";
 import NotFound from "./pages/NotFound";
+import HtmlEditor from "./pages/HtmlEditor";
 import FigmaConnect from "./pages/figma/Connect";
 import FileFrames from "./pages/figma/FileFrames";
 import ExportFrame from "./pages/figma/ExportFrame";
@@ -40,6 +41,7 @@ const App = () => (
           <Route path="/figma/files/:fileKey/export" element={<ExportFrame />} />
           <Route path="/figma/team" element={<FigmaTeamInput />} />
           <Route path="/figma/team/:teamId/files" element={<FigmaTeamFiles />} />
+          <Route path="/html-editor/:fileKey" element={<HtmlEditor />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

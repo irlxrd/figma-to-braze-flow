@@ -60,8 +60,25 @@ export default function FileDetail() {
   }, [fileKey, navigate]);
 
   const handleSendToBraze = () => {
-    console.log("Send to Braze clicked for file:", fileKey);
-    toast.info("Send to Braze functionality coming soon!");
+    if (!fileDetail || !fileDetail.pages || fileDetail.pages.length === 0) {
+      toast.error("No pages found to convert");
+      return;
+    }
+
+    // Use the first page for now, later we can add page selection
+    const pageData = fileDetail.pages[0];
+    const pageName = pageData.name || fileDetail.name || 'Design';
+
+    console.log("Converting to HTML:", { fileKey, pageName, pageData });
+    
+    // Navigate to HTML editor with page data
+    navigate(`/html-editor/${fileKey}`, {
+      state: {
+        pageData: pageData,
+        pageName: pageName,
+        fileDetail: fileDetail
+      }
+    });
   };
 
   return (

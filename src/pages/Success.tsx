@@ -7,9 +7,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 export default function Success() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { campaignType, fields } = location.state || {};
+  const { campaignType, fields, exportData, pageName } = location.state || {};
 
   const campaignId = `BRZ-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  
+  // Check if this is from HTML export
+  const isHtmlExport = exportData && pageName;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -25,26 +28,54 @@ export default function Success() {
               <CheckCircle2 className="h-10 w-10 text-success" />
             </div>
             
-            <h2 className="text-3xl font-bold mb-3">Campaign Created!</h2>
+            <h2 className="text-3xl font-bold mb-3">
+              {isHtmlExport ? 'HTML Export Complete!' : 'Campaign Created!'}
+            </h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Your campaign has been successfully created in Braze
+              {isHtmlExport 
+                ? `"${pageName}" has been converted to HTML and is ready for Braze`
+                : 'Your campaign has been successfully created in Braze'
+              }
             </p>
 
             <div className="bg-muted/50 rounded-lg p-6 mb-8 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-muted-foreground">Campaign ID</span>
-                <span className="font-mono font-semibold">{campaignId}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-muted-foreground">Type</span>
-                <span className="font-semibold capitalize">
-                  {campaignType?.replace("-", " ") || "In-App Message"}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-muted-foreground">Status</span>
-                <span className="text-success font-semibold">Draft</span>
-              </div>
+              {isHtmlExport ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Design Name</span>
+                    <span className="font-semibold">{pageName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Export Type</span>
+                    <span className="font-semibold capitalize">{exportData.type || 'Email'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Liquid Tags</span>
+                    <span className="font-semibold">{exportData.liquidTags?.length || 0} found</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Status</span>
+                    <span className="text-success font-semibold">Ready for Braze</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Campaign ID</span>
+                    <span className="font-mono font-semibold">{campaignId}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Type</span>
+                    <span className="font-semibold capitalize">
+                      {campaignType?.replace("-", " ") || "In-App Message"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-muted-foreground">Status</span>
+                    <span className="text-success font-semibold">Draft</span>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -70,10 +101,21 @@ export default function Success() {
               What's Next?
             </h3>
             <ul className="text-sm text-muted-foreground space-y-2">
-              <li>• Review and test your campaign in Braze dashboard</li>
-              <li>• Set up targeting and scheduling options</li>
-              <li>• Add conversion tracking and analytics</li>
-              <li>• Launch when ready!</li>
+              {isHtmlExport ? (
+                <>
+                  <li>• Upload the HTML file to your Braze campaign</li>
+                  <li>• Test the liquid tags with sample user data</li>
+                  <li>• Set up targeting and scheduling options</li>
+                  <li>• Preview on different devices and email clients</li>
+                </>
+              ) : (
+                <>
+                  <li>• Review and test your campaign in Braze dashboard</li>
+                  <li>• Set up targeting and scheduling options</li>
+                  <li>• Add conversion tracking and analytics</li>
+                  <li>• Launch when ready!</li>
+                </>
+              )}
             </ul>
           </div>
         </div>
