@@ -48,9 +48,16 @@ export default function ConnectionScreen() {
         const brazeResponse = await fetch("/braze/connect");
         
         if (brazeResponse.ok) {
-          const brazeData = await brazeResponse.json();
-          setBrazeConnected(brazeData.connected === true);
+          const text = await brazeResponse.text();
+          if (text) {
+            const brazeData = JSON.parse(text);
+            setBrazeConnected(brazeData.connected === true);
+          } else {
+            console.error("Braze response is empty");
+            setBrazeConnected(false);
+          }
         } else {
+          console.error("Braze connection check failed with status:", brazeResponse.status);
           setBrazeConnected(false);
         }
       } catch (error) {
@@ -59,11 +66,15 @@ export default function ConnectionScreen() {
       }
 
       // Check Figma connection
+      // Check both backend config AND localStorage OAuth token
       try {
+        const hasOAuthToken = localStorage.getItem("figma_access_token") !== null;
         const figmaResponse = await fetch("/api/figma/status");
+        
         if (figmaResponse.ok) {
           const figmaData = await figmaResponse.json();
-          setFigmaConnected(figmaData.configured === true);
+          // Only show as connected if we have BOTH backend config AND OAuth token
+          setFigmaConnected(figmaData.configured === true && hasOAuthToken);
         } else {
           setFigmaConnected(false);
         }
@@ -79,7 +90,7 @@ export default function ConnectionScreen() {
   }, []);
 
   const handleContinue = () => {
-    navigate("/select-design");
+    navigate("/figma/team");
   };
 
   const handleConnectBraze = async () => {
@@ -101,7 +112,24 @@ export default function ConnectionScreen() {
         body: JSON.stringify({ apiKey, region }),
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        const text = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          throw new Error(`Server returned ${response.status}: ${text || 'Unknown error'}`);
+        }
+        setConnectError(errorData.error || "Failed to connect to Braze");
+        return;
+      }
+
+      const text = await response.text();
+      if (!text) {
+        throw new Error("Server returned empty response");
+      }
+
+      const data = JSON.parse(text);
 
       if (data.success) {
         setConnectSuccess(true);
@@ -117,6 +145,7 @@ export default function ConnectionScreen() {
         setConnectError(data.error || "Failed to connect to Braze");
       }
     } catch (error) {
+      console.error("Braze connection error:", error);
       setConnectError(error instanceof Error ? error.message : "Failed to connect to Braze");
     } finally {
       setConnecting(false);
@@ -236,7 +265,7 @@ export default function ConnectionScreen() {
               className="w-full mt-8"
               onClick={handleContinue}
             >
-              Continue to Select Design
+              Browse Your Figma Designs
             </Button>
           )}
         </div>

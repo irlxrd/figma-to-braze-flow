@@ -25,6 +25,12 @@ async function setupRoutes() {
     console.log('🔄 Loading Braze test routes...');
     const brazeTestRoutes = (await import('../src/routes/brazeAuthTest.js')).default;
     
+    console.log('🔄 Loading LLM routes...');
+    const llmRoutes = (await import('../src/routes/llmSuggestions.js')).default;
+    
+    console.log('🔄 Loading LLM test routes...');
+    const llmTestRoutes = (await import('../src/routes/llmTest.js')).default;
+    
     // Mount route handlers with error handling
     app.use('/api/figma', (req, res, next) => {
       try {
@@ -68,6 +74,25 @@ async function setupRoutes() {
         brazeTestRoutes(req, res, next);
       } catch (error) {
         console.error('❌ Test route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+
+    app.use('/api/llm', (req, res, next) => {
+      try {
+        llmRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ LLM route error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
+    });
+
+    // Mount LLM test routes
+    app.use('/api/llm', (req, res, next) => {
+      try {
+        llmTestRoutes(req, res, next);
+      } catch (error) {
+        console.error('❌ LLM test route error:', error);
         res.status(500).json({ error: 'Internal server error', details: error.message });
       }
     });

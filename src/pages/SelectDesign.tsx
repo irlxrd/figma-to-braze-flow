@@ -1,16 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { mockFigmaFiles } from "@/data/mockData";
 import { FigmaFile, FigmaFrame } from "@/types/workflow";
-import { FileImage, ChevronRight } from "lucide-react";
+import { FileImage, ChevronRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 export default function SelectDesign() {
   const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<FigmaFile | null>(null);
   const [selectedFrame, setSelectedFrame] = useState<FigmaFrame | null>(null);
+  const [showMockWarning, setShowMockWarning] = useState(true);
+
+  useEffect(() => {
+    // Show a warning that these are demo designs
+    toast.info("These are demo designs. Connect to your Figma account to access your real designs.", {
+      duration: 5000,
+    });
+  }, []);
 
   const handleContinue = () => {
     if (selectedFrame) {
@@ -27,6 +36,38 @@ export default function SelectDesign() {
       />
       
       <main className="container mx-auto px-6 py-12">
+        {showMockWarning && (
+          <Card className="mb-6 border-orange-200 bg-orange-50">
+            <div className="p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-orange-900 mb-1">
+                  These are Demo Designs
+                </h3>
+                <p className="text-sm text-orange-800 mb-3">
+                  You're viewing sample designs. To work with your actual Figma files, connect to your Figma team.
+                </p>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    onClick={() => navigate("/figma/team")}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    Browse My Figma Files
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setShowMockWarning(false)}
+                  >
+                    Continue with Demo
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+        
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             {!selectedFile ? (

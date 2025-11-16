@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ArrowLeft, Download, Send, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Send, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import type { FigmaImageResponse } from "@/types/figma";
+import { useBrazeConnection } from "@/hooks/useBrazeConnection";
+import { BrazeConnectionWarning } from "@/components/BrazeConnectionWarning";
 
 export default function ExportFrame() {
   const navigate = useNavigate();
@@ -26,6 +28,9 @@ export default function ExportFrame() {
   const [error, setError] = useState<string | null>(null);
   const [campaignName, setCampaignName] = useState("");
   const [sent, setSent] = useState(false);
+  
+  // Use the Braze connection hook
+  const { isConnected: brazeConnected, isChecking: checkingBraze } = useBrazeConnection();
 
   useEffect(() => {
     if (!fileKey || !nodeId) {
@@ -73,6 +78,12 @@ export default function ExportFrame() {
 
     if (!campaignName.trim()) {
       toast.error("Please enter a campaign name");
+      return;
+    }
+
+    if (!brazeConnected) {
+      toast.error("Braze is not connected. Please connect your Braze account first.");
+      navigate("/");
       return;
     }
 
@@ -127,7 +138,18 @@ export default function ExportFrame() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {loading ? (
+              {checkingBraze ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <span className="ml-3 text-muted-foreground">Checking connections...</span>
+                </div>
+              ) : !brazeConnected ? (
+                <BrazeConnectionWarning 
+                  backPath={`/figma/files/${fileKey}/frames`}
+                  backText="Back to Frames"
+                  message="You need to connect your Braze account before sending images."
+                />
+              ) : loading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   <span className="ml-3 text-muted-foreground">Exporting image...</span>

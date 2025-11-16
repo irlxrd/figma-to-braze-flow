@@ -10,19 +10,19 @@ export default defineConfig(({ mode }) => ({
     port: 8081,
     proxy: {
       "/braze": {
-        target: "http://localhost:4000",
+        target: "http://localhost:3000",
         changeOrigin: true,
       },
       "/api": {
-        target: "http://localhost:4000",
+        target: "http://localhost:3000",
         changeOrigin: true,
       },
       "/test": {
-        target: "http://localhost:4000",
+        target: "http://localhost:3000",
         changeOrigin: true,
       },
       "/health": {
-        target: "http://localhost:4000",
+        target: "http://localhost:3000",
         changeOrigin: true,
       },
     },

@@ -10,6 +10,7 @@ import brazeAuthTestRouter from "./routes/brazeAuthTest.js";
 import brazeConnectRouter from "./routes/brazeConnect.js";
 import brazeUploadRouter from "./routes/brazeUpload.js";
 import figmaRouter from "./routes/figma.js";
+import llmSuggestionsRouter from "./routes/llmSuggestions.js";
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use("/braze", brazeConnectRouter);
 app.use("/api/braze", brazeUploadRouter);
 app.use("/api/figma", figmaRouter);
 app.use("/api/local", figmaRouter); // POST /api/local/figma-token is handled by figmaRouter
+app.use("/api/llm", llmSuggestionsRouter);
 
 // Root route - API information
 app.get("/", (req, res) => {

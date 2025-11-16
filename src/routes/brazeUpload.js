@@ -161,5 +161,175 @@ router.post("/upload-image", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/braze/upload-template
+ * Upload an HTML template to Braze as a Content Block or Email Template
+ * Body: { html: string, templateName: string, type: 'content_block' | 'email_campaign' }
+ */
+router.post("/upload-template", async (req, res) => {
+  try {
+    const { html, templateName, type = 'content_block' } = req.body;
+
+    console.log('[Upload Template] Request received:', {
+      hasHtml: !!html,
+      htmlLength: html?.length,
+      templateName,
+      type
+    });
+
+    // Validate input
+    if (!html || typeof html !== "string") {
+      console.error('[Upload Template] Invalid HTML:', typeof html);
+      return res.status(400).json({
+        success: false,
+        error: "html is required and must be a string",
+      });
+    }
+
+    if (!templateName || typeof templateName !== "string") {
+      console.error('[Upload Template] Invalid template name:', typeof templateName);
+      return res.status(400).json({
+        success: false,
+        error: "templateName is required and must be a string",
+      });
+    }
+
+    // Sanitize template name for Braze
+    // Braze only allows alphanumeric, dashes, and underscores
+    const sanitizedName = templateName
+      .trim()
+      .replace(/[^a-zA-Z0-9-_]/g, '_') // Replace invalid chars with underscore
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+
+    console.log('[Upload Template] Sanitized name:', {
+      original: templateName,
+      sanitized: sanitizedName
+    });
+
+    // Check if Braze is configured
+    const braze = getBrazeConfig();
+    console.log('[Upload Template] Braze config:', {
+      hasApiKey: !!braze.apiKey,
+      hasEndpoint: !!braze.endpoint,
+      endpoint: braze.endpoint
+    });
+    
+    if (!braze.apiKey || !braze.endpoint) {
+      return res.status(400).json({
+        success: false,
+        error: "Braze is not connected. Please connect your Braze account first.",
+      });
+    }
+
+    const headers = getAuthHeaders();
+    console.log('[Upload Template] Headers prepared');
+    
+    // Upload to Braze
+    try {
+      if (type === 'content_block') {
+        // Create a Content Block
+        const contentBlockUrl = `${braze.endpoint}/content_blocks/create`;
+        console.log('[Upload Template] Creating content block at:', contentBlockUrl);
+        
+        const payload = {
+          name: sanitizedName,
+          description: `HTML template created from Figma design: ${templateName}`,
+          content: html,
+          content_type: "html",
+          tags: ["figma", "email-template"]
+        };
+
+        const response = await axios.post(contentBlockUrl, payload, {
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+          },
+          validateStatus: () => true, // Don't throw, we'll handle status codes
+        });
+
+        console.log('[Upload Template] Braze response:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        });
+
+        if (response.status >= 200 && response.status < 300) {
+          return res.json({
+            success: true,
+            message: "Content block created successfully",
+            data: response.data,
+            sanitizedName: sanitizedName,
+            originalName: templateName
+          });
+        } else {
+          return res.status(response.status).json({
+            success: false,
+            error: `Braze API returned ${response.status}: ${response.statusText}`,
+            details: response.data,
+          });
+        }
+      } else {
+        // For email campaigns, we'll create a template
+        const templateUrl = `${braze.endpoint}/templates/email/create`;
+        console.log('[Upload Template] Creating email template at:', templateUrl);
+        
+        const payload = {
+          template_name: sanitizedName,
+          subject: `Template: ${templateName}`,
+          body: html,
+          tags: ["figma", "email-template"]
+        };
+
+        const response = await axios.post(templateUrl, payload, {
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+          },
+          validateStatus: () => true,
+        });
+
+        console.log('[Upload Template] Braze response:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        });
+
+        if (response.status >= 200 && response.status < 300) {
+          return res.json({
+            success: true,
+            message: "Email template created successfully",
+            data: response.data,
+            sanitizedName: sanitizedName,
+            originalName: templateName
+          });
+        } else {
+          return res.status(response.status).json({
+            success: false,
+            error: `Braze API returned ${response.status}: ${response.statusText}`,
+            details: response.data,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("[Upload Template] Braze API error:", error);
+      const status = error.response?.status || 500;
+      const errorData = error.response?.data || { error: error.message };
+
+      return res.status(status).json({
+        success: false,
+        error: `Failed to upload template to Braze: ${error.message}`,
+        details: errorData,
+      });
+    }
+  } catch (error) {
+    console.error("Error in /api/braze/upload-template:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Internal server error",
+    });
+  }
+});
+
 export default router;
 

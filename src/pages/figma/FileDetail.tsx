@@ -7,7 +7,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { File, Loader2, ArrowLeft, Send, Image as ImageIcon } from "lucide-react";
+import { File, Loader2, ArrowLeft, Send, Image as ImageIcon, Code } from "lucide-react";
 import { toast } from "sonner";
 
 interface FileDetail {
@@ -59,7 +59,7 @@ export default function FileDetail() {
     fetchFileDetail();
   }, [fileKey, navigate]);
 
-  const handleSendToBraze = () => {
+  const handleConvertToHtml = () => {
     if (!fileDetail || !fileDetail.pages || fileDetail.pages.length === 0) {
       toast.error("No pages found to convert");
       return;
@@ -100,7 +100,7 @@ export default function FileDetail() {
                 {loading ? "Loading..." : fileDetail?.name || "File Details"}
               </CardTitle>
               <CardDescription>
-                Preview file information and prepare to send to Braze
+                Preview file information and convert designs to HTML with Braze Liquid templating
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -172,15 +172,15 @@ export default function FileDetail() {
                     )}
                   </div>
 
-                  {/* Send to Braze Button */}
+                  {/* Convert to HTML with Liquid Tags Button */}
                   <div className="pt-4 border-t">
                     <Button
-                      onClick={handleSendToBraze}
+                      onClick={handleConvertToHtml}
                       className="w-full"
                       size="lg"
                     >
-                      <Send className="mr-2 h-4 w-4" />
-                      Send to Braze
+                      <Code className="mr-2 h-4 w-4" />
+                      Convert to HTML + Add Liquid Tags
                     </Button>
                   </div>
                 </div>

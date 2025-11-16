@@ -21,15 +21,26 @@ import {
   Plus,
   X,
   Loader2,
-  Copy
+  Copy,
+  Sparkles,
+  Check,
+  RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { convertPageToHtml, insertLiquidTags, generateBrazeExport } from "@/services/figmaToHtml";
+import { getLiquidTagSuggestions } from "@/services/llmSuggestions";
+import { useBrazeConnection } from "@/hooks/useBrazeConnection";
+import { BrazeProtected } from "@/components/BrazeProtected";
 
 interface LiquidTag {
   placeholder: string;
   description: string;
   fallback: string;
+}
+
+interface LiquidTagSuggestion extends LiquidTag {
+  location: string;
+  reason: string;
 }
 
 export default function HtmlEditor() {
@@ -53,7 +64,16 @@ export default function HtmlEditor() {
   const [loading, setLoading] = useState<boolean>(true);
   const [exporting, setExporting] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('preview');
+  const [templateName, setTemplateName] = useState(`${pageName}_template`);
+  const [uploadType, setUploadType] = useState<'content_block' | 'email_campaign'>('content_block');
+  const [suggestions, setSuggestions] = useState<LiquidTagSuggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [conversionMetadata, setConversionMetadata] = useState<any>(null);
   const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Check Braze connection
+  const { isConnected: brazeConnected } = useBrazeConnection();
 
   useEffect(() => {
     if (!pageData) {
@@ -62,17 +82,36 @@ export default function HtmlEditor() {
       return;
     }
 
+    console.log('Page data received:', {
+      type: pageData.type,
+      name: pageData.name,
+      hasChildren: !!pageData.children,
+      childCount: pageData.children?.length || 0,
+      children: pageData.children?.map(c => ({ type: c.type, name: c.name }))
+    });
+
     convertToHtml();
   }, [pageData, fileKey, navigate]);
 
   const convertToHtml = async () => {
     setLoading(true);
     try {
-      const result = convertPageToHtml(pageData);
+      console.log('Converting page to HTML...', { pageData, fileKey });
+      const result = convertPageToHtml(pageData, fileKey);
       setHtml(result.html);
       setCss(result.css);
       setProcessedHtml(result.html);
-      toast.success(`Converted ${result.metadata.frameCount} frames to HTML`);
+      setConversionMetadata(result.metadata);
+      
+      // Inform user about images
+      if (result.metadata.requiresImages) {
+        toast.success(
+          `Converted ${result.metadata.frameCount} frames to HTML. Images will be exported from Figma.`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success(`Converted ${result.metadata.frameCount} frames to HTML`);
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to convert design to HTML');
       console.error('HTML conversion error:', error);
@@ -113,6 +152,41 @@ export default function HtmlEditor() {
     toast.success('Liquid tag removed');
   };
 
+  const getSuggestions = async () => {
+    setLoadingSuggestions(true);
+    try {
+      const suggestionsData = await getLiquidTagSuggestions(processedHtml, liquidTags);
+      setSuggestions(suggestionsData);
+      setShowSuggestions(true);
+      toast.success(`Got ${suggestionsData.length} suggestions from AI`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to get suggestions');
+      console.error('Suggestions error:', error);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  const applySuggestion = (suggestion: LiquidTagSuggestion) => {
+    // Check if already exists
+    if (liquidTags.some(tag => tag.placeholder === suggestion.placeholder)) {
+      toast.error('This tag already exists');
+      return;
+    }
+
+    // Add to liquid tags
+    setLiquidTags([...liquidTags, {
+      placeholder: suggestion.placeholder,
+      description: suggestion.description,
+      fallback: suggestion.fallback
+    }]);
+
+    // Remove from suggestions
+    setSuggestions(suggestions.filter(s => s.placeholder !== suggestion.placeholder));
+    
+    toast.success(`Added ${suggestion.placeholder} tag`);
+  };
+
   const insertLiquidTagAtCursor = (liquidSyntax: string) => {
     const textarea = htmlTextareaRef.current;
     if (!textarea) {
@@ -137,34 +211,96 @@ export default function HtmlEditor() {
   };
 
   const exportToBraze = async () => {
+    if (!brazeConnected) {
+      toast.error("Braze is not connected. Please connect your Braze account first.");
+      navigate("/");
+      return;
+    }
+
+    if (!templateName.trim()) {
+      toast.error("Please enter a template name");
+      return;
+    }
+
     setExporting(true);
     try {
       const brazeExport = generateBrazeExport(processedHtml);
       
-      // Create downloadable file
+      console.log('[Upload] Sending to Braze:', {
+        htmlLength: brazeExport.html.length,
+        templateName: templateName.trim(),
+        type: uploadType
+      });
+      
+      // Upload HTML template to Braze
+      const response = await fetch("/api/braze/upload-template", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          html: brazeExport.html,
+          templateName: templateName.trim(),
+          type: uploadType,
+        }),
+      });
+
+      console.log('[Upload] Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Server returned ${response.status}: ${errorText}`);
+        }
+        
+        console.error('[Upload] Error response:', errorData);
+        
+        // Show detailed error message
+        const errorMsg = errorData.error || "Failed to upload template to Braze";
+        const details = errorData.details ? `\n\nDetails: ${JSON.stringify(errorData.details)}` : '';
+        throw new Error(errorMsg + details);
+      }
+
+      const data = await response.json();
+      console.log('[Upload] Success response:', data);
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to upload template to Braze");
+      }
+
+      // Also create downloadable file as backup
       const blob = new Blob([brazeExport.html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${pageName.replace(/\s+/g, '_')}_braze_template.html`;
+      a.download = `${templateName.replace(/\s+/g, '_')}_braze_template.html`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      // Show export summary
-      toast.success(`HTML exported! Found ${brazeExport.liquidTags.length} liquid tags`);
+      // Show success message with sanitized name if it was changed
+      let successMsg = `Template uploaded to Braze successfully!`;
+      if (data.sanitizedName && data.sanitizedName !== data.originalName) {
+        successMsg += ` (Saved as "${data.sanitizedName}")`;
+      }
+      toast.success(successMsg);
       
-      // Navigate to success page or campaign setup
+      // Navigate to success page
       navigate('/success', {
         state: {
           exportData: brazeExport,
-          pageName: pageName
+          pageName: pageName,
+          uploaded: true,
+          uploadType: uploadType
         }
       });
     } catch (error: any) {
-      toast.error(error.message || 'Failed to export HTML');
-      console.error('Export error:', error);
+      toast.error(error.message || 'Failed to upload template to Braze');
+      console.error('Upload error:', error);
     } finally {
       setExporting(false);
     }
@@ -183,7 +319,12 @@ export default function HtmlEditor() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      <div className="max-w-7xl mx-auto">
+      <BrazeProtected 
+        backPath={`/figma/file/${fileKey}`}
+        backText="Back to Design"
+        warningMessage="You need to connect your Braze account before uploading HTML templates."
+      >
+        <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <Button
@@ -203,20 +344,94 @@ export default function HtmlEditor() {
               </p>
             </div>
             
-            <Button 
-              onClick={exportToBraze}
-              disabled={exporting}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {exporting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              Export to Braze
-            </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="templateName">Template Name:</Label>
+                <Input
+                  id="templateName"
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Enter template name"
+                  className="w-48"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="uploadType">Type:</Label>
+                <select
+                  id="uploadType"
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value as 'content_block' | 'email_campaign')}
+                  className="px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="content_block">Content Block</option>
+                  <option value="email_campaign">Email Campaign</option>
+                </select>
+              </div>
+              <Button 
+                onClick={exportToBraze}
+                disabled={exporting || !brazeConnected || !templateName.trim()}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {exporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                Upload to Braze
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Conversion Info */}
+        {!loading && html && conversionMetadata && (
+          <Card className="mb-6 border-blue-200 bg-blue-50">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="font-semibold text-blue-900">Status:</span>
+                    <span className="ml-2 text-blue-700">✓ Converted</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-blue-900">Frames:</span>
+                    <span className="ml-2 text-blue-700">{conversionMetadata.frameCount}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-blue-900">Elements:</span>
+                    <span className="ml-2 text-blue-700">{conversionMetadata.elementCount}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-blue-900">Images:</span>
+                    <span className="ml-2 text-blue-700">
+                      {conversionMetadata.requiresImages ? 'Yes (auto-exported)' : 'None'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {conversionMetadata.requiresImages && (
+                <div className="mt-3 text-xs text-blue-800 bg-blue-100 p-2 rounded flex items-center justify-between">
+                  <span>
+                    ℹ️ Images and vectors are being exported from Figma. If images don't load, verify your Figma access token.
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      toast.info('Reconverting design...');
+                      convertToHtml();
+                    }}
+                    className="ml-3"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Reconvert
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Liquid Tags Panel */}
@@ -232,6 +447,85 @@ export default function HtmlEditor() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* AI Suggestions Button */}
+                <Button
+                  onClick={getSuggestions}
+                  disabled={loadingSuggestions || !processedHtml}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  size="sm"
+                >
+                  {loadingSuggestions ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Getting AI Suggestions...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      AI Suggest Tags
+                    </>
+                  )}
+                </Button>
+
+                {/* AI Suggestions */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="space-y-2 p-3 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium text-purple-900 flex items-center">
+                        <Sparkles className="mr-1 h-4 w-4" />
+                        AI Suggestions ({suggestions.length})
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowSuggestions(false)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {suggestions.map((suggestion) => (
+                        <div
+                          key={suggestion.placeholder}
+                          className="p-3 bg-white rounded-md border border-purple-200 hover:border-purple-400 transition-colors"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-mono font-bold text-purple-700">
+                                {`{{${suggestion.placeholder}}}`}
+                              </div>
+                              <div className="text-xs text-slate-700 mt-1">
+                                {suggestion.description}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => applySuggestion(suggestion)}
+                              className="h-7 px-2 bg-purple-600 text-white hover:bg-purple-700 ml-2"
+                            >
+                              <Check className="h-3 w-3 mr-1" />
+                              Add
+                            </Button>
+                          </div>
+                          {suggestion.fallback && (
+                            <div className="text-xs text-slate-500 mb-1">
+                              Default: "{suggestion.fallback}"
+                            </div>
+                          )}
+                          <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                            📍 {suggestion.location}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-1 italic">
+                            💡 {suggestion.reason}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Existing Tags */}
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Active Tags</Label>
@@ -483,7 +777,8 @@ export default function HtmlEditor() {
             </Card>
           </div>
         </div>
-      </div>
+        </div>
+      </BrazeProtected>
     </div>
   );
 }
